@@ -7,16 +7,16 @@
 #include "fd_forward.h"
 #include "fr_forward.h"
 #include "fr_flash.h"
-#include "camera_pins.h"
 
-#define GREENLED_PIN 14
-#define REDLED_PIN 15
+const char* ssid = "ifce-alunos";
+const char* password = "ifce4lun0s";
 
-const char* ssid = "CLÁUDIO INET";
-const char* password = "csabeofjds";
 #define ENROLL_CONFIRM_TIMES 5
 #define FACE_ID_SAVE_NUMBER 7
+
 #define CAMERA_MODEL_AI_THINKER
+#include "camera_pins.h"
+
 using namespace websockets;
 WebsocketsServer socket_server;
 
@@ -25,7 +25,9 @@ camera_fb_t * fb = NULL;
 long current_millis;
 long last_detected_millis = 0;
 
-#define relay_pin 2 // pin 12 can also be used
+#define relay_pin 2
+#define green 14
+#define red 15
 unsigned long door_opened_millis = 0;
 long interval = 5000;           // open lock for ... milliseconds
 bool face_recognised = false;
@@ -48,14 +50,14 @@ static inline mtmn_config_t app_mtmn_config()
   mtmn_config.min_face = 80;
   mtmn_config.pyramid = 0.707;
   mtmn_config.pyramid_times = 4;
-  mtmn_config.p_threshold.score = 0.6;
-  mtmn_config.p_threshold.nms = 0.7;
+  mtmn_config.p_threshold.score = 0.5;
+  mtmn_config.p_threshold.nms = 0.6;
   mtmn_config.p_threshold.candidate_number = 20;
-  mtmn_config.r_threshold.score = 0.7;
-  mtmn_config.r_threshold.nms = 0.7;
+  mtmn_config.r_threshold.score = 0.6;
+  mtmn_config.r_threshold.nms = 0.6;
   mtmn_config.r_threshold.candidate_number = 10;
-  mtmn_config.o_threshold.score = 0.7;
-  mtmn_config.o_threshold.nms = 0.7;
+  mtmn_config.o_threshold.score = 0.6;
+  mtmn_config.o_threshold.nms = 0.6;
   mtmn_config.o_threshold.candidate_number = 1;
   return mtmn_config;
 }
@@ -90,11 +92,13 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
+  pinMode(green, OUTPUT);
+  pinMode(red, OUTPUT);
+  digitalWrite(green, LOW);
+  digitalWrite(red, LOW);
+
   digitalWrite(relay_pin, LOW);
   pinMode(relay_pin, OUTPUT);
-
-  pinMode(GREENLED_PIN, OUTPUT);
-  pinMode(REDLED_PIN, OUTPUT);
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -138,6 +142,10 @@ void setup() {
   sensor_t * s = esp_camera_sensor_get();
   s->set_framesize(s, FRAMESIZE_QVGA);
 
+#if defined(CAMERA_MODEL_M5STACK_WIDE)
+  s->set_vflip(s, 1);
+  s->set_hmirror(s, 1);
+#endif
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -206,14 +214,12 @@ static esp_err_t send_face_list(WebsocketsClient &client)
     client.send(add_face); //send face to browser
     head = head->next;
   }
-  return ESP_OK;
 }
 
 static esp_err_t delete_all_faces(WebsocketsClient &client)
 {
   delete_face_all_in_flash_with_name(&st_face_list);
   client.send("delete_faces");
-  return ESP_OK;
 }
 
 void handle_message(WebsocketsClient &client, WebsocketsMessage msg)
@@ -310,7 +316,6 @@ void loop() {
               sprintf(captured_message, "FACE CAPTURED FOR %s", st_face_list.tail->id_name);
               client.send(captured_message);
               send_face_list(client);
-
             }
           }
 
@@ -320,22 +325,19 @@ void loop() {
             if (f)
             {
               char recognised_message[64];
+              digitalWrite(green, HIGH);  // Acende LED verde
+              delay(1000);
+              digitalWrite(green, LOW);   // Desliga LED verde
               sprintf(recognised_message, "DOOR OPEN FOR %s", f->id_name);
               open_door(client);
               client.send(recognised_message);
-
-              //GREEN LED
-              digitalWrite(GREENLED_PIN, HIGH);
-              delay(2000);
-              digitalWrite(GREENLED_PIN, LOW);
             }
             else
             {
               client.send("FACE NOT RECOGNISED");
-              //GREEN LED
-              digitalWrite(REDLED_PIN, HIGH);
-              delay(2000);
-              digitalWrite(REDLED_PIN, LOW);
+              digitalWrite(red, HIGH);
+              delay(1000);
+              digitalWrite(red, LOW);
             }
           }
           dl_matrix3d_free(out_res.face_id);

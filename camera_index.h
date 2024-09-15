@@ -1,3 +1,4 @@
+
 //File: index_ov2640.html.gz, Size: 4316
 #define index_ov2640_html_gz_len 4316
 const uint8_t index_ov2640_html_gz[] = {
